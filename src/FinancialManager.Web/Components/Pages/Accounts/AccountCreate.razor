@@ -1,0 +1,95 @@
+@page "/accounts/new"
+@inherits CancellableComponentBase
+@inject IAccountService AccountService
+@inject NavigationManager Navigation
+
+<PageTitle>Add account · Financial Manager</PageTitle>
+
+<a class="back-link" href="accounts"><Icon Name="IconName.ArrowLeft" Size="16" /> Accounts</a>
+<PageHeader Title="Add account" Subtitle="Enter the account details and its current balance." />
+
+<section class="card form-card">
+    <EditForm Model="_request" OnValidSubmit="SubmitAsync" FormName="create-account">
+        <DataAnnotationsValidator />
+        <ErrorAlert Error="_error" OnDismiss="() => _error = null" />
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="name">Account name</label>
+                <InputText id="name" class="input" @bind-Value="_request.Name" placeholder="e.g. Everyday checking" />
+                <ValidationMessage For="() => _request.Name" />
+            </div>
+
+            <div class="form-field">
+                <label for="type">Account type</label>
+                <InputSelect id="type" class="input" @bind-Value="_request.Type">
+                    @foreach (var type in Enum.GetValues<AccountType>())
+                    {
+                        <option value="@type">@type.ToDisplayName()</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _request.Type" />
+            </div>
+
+            <div class="form-field">
+                <label for="institution">Institution <span class="optional">(optional)</span></label>
+                <InputText id="institution" class="input" @bind-Value="_request.Institution" placeholder="e.g. Chase, Fidelity" />
+                <ValidationMessage For="() => _request.Institution" />
+            </div>
+
+            <div class="form-field">
+                <label for="balance">@BalanceLabel</label>
+                <InputNumber id="balance" class="input" @bind-Value="_request.OpeningBalance" step="0.01" />
+                <div class="hint">@BalanceHint</div>
+                <ValidationMessage For="() => _request.OpeningBalance" />
+            </div>
+
+            <div class="form-field form-field-wide">
+                <label for="notes">Notes <span class="optional">(optional)</span></label>
+                <InputTextArea id="notes" class="input" rows="3" @bind-Value="_request.Notes" />
+                <ValidationMessage For="() => _request.Notes" />
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a class="btn btn-secondary" href="accounts">Cancel</a>
+            <button type="submit" class="btn btn-primary" disabled="@_isSaving">Create account</button>
+        </div>
+    </EditForm>
+</section>
+
+@code {
+    private readonly CreateAccountRequest _request = new();
+    private Error? _error;
+    private bool _isSaving;
+
+    private string BalanceLabel => _request.Type.IsLiability() ? "Amount owed" : "Current cash balance";
+
+    private string BalanceHint => _request.Type switch
+    {
+        _ when _request.Type.IsLiability() => "Enter the outstanding balance you currently owe.",
+        _ when _request.Type.SupportsHoldings() => "Uninvested cash only. You can add stock holdings after creating the account.",
+        _ => "The balance shown by your bank today.",
+    };
+
+    private async Task SubmitAsync()
+    {
+        _isSaving = true;
+        _error = null;
+        try
+        {
+            var result = await AccountService.CreateAccountAsync(_request, ComponentToken);
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo($"accounts/{result.Value}");
+                return;
+            }
+
+            _error = result.Error;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

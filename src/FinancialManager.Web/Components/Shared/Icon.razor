@@ -1,0 +1,52 @@
+@* Inline SVG icons (Feather-style strokes) so the UI has no external icon dependency. *@
+<svg class="icon @CssClass" viewBox="0 0 24 24" width="@Size" height="@Size" fill="none" stroke="currentColor"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    @switch (Name)
+    {
+        case IconName.Logo:
+            <path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" />
+            break;
+        case IconName.Dashboard:
+            <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
+            break;
+        case IconName.Accounts:
+            <rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" />
+            break;
+        case IconName.Search:
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            break;
+        case IconName.Plus:
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            break;
+        case IconName.Refresh:
+            <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            break;
+        case IconName.Trash:
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            break;
+        case IconName.Edit:
+            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            break;
+        case IconName.Archive:
+            <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+            break;
+        case IconName.ArrowLeft:
+            <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+            break;
+    }
+</svg>
+
+@code {
+    private const int DefaultSize = 18;
+
+    [Parameter, EditorRequired]
+    public IconName Name { get; set; }
+
+    [Parameter]
+    public int Size { get; set; } = DefaultSize;
+
+    [Parameter]
+    public string? CssClass { get; set; }
+}

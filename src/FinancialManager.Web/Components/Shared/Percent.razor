@@ -1,0 +1,20 @@
+<span class="percent @Tone.For(Value, Colorize)">@Formatted</span>
+
+@code {
+    /// <summary>Ratio where 0.05 means 5%.</summary>
+    [Parameter]
+    public decimal? Value { get; set; }
+
+    [Parameter]
+    public bool ShowSign { get; set; } = true;
+
+    [Parameter]
+    public bool Colorize { get; set; } = true;
+
+    private string Formatted => Value switch
+    {
+        null => DisplayFormats.NotAvailable,
+        > 0 when ShowSign => "+" + Value.Value.ToString(DisplayFormats.Percent, CultureInfo.CurrentCulture),
+        _ => Value.Value.ToString(DisplayFormats.Percent, CultureInfo.CurrentCulture),
+    };
+}

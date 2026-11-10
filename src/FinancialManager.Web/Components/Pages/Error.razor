@@ -1,0 +1,25 @@
+@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Error · Financial Manager</PageTitle>
+
+<PageHeader Title="Something went wrong" Subtitle="An unexpected error occurred while processing your request." />
+
+@if (ShowRequestId)
+{
+    <p class="muted">Request ID: <code>@RequestId</code></p>
+}
+
+<a class="btn btn-primary" href="">Back to dashboard</a>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

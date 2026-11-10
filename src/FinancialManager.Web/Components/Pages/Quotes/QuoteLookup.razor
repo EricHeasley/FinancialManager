@@ -1,0 +1,181 @@
+@page "/quotes"
+@inherits CancellableComponentBase
+@inject IQuoteService QuoteService
+@inject IAccountService AccountService
+
+<PageTitle>Stock lookup · Financial Manager</PageTitle>
+
+<PageHeader Title="Stock lookup" Subtitle="Get the latest price for any stock, ETF, fund, index or crypto ticker." />
+
+<section class="card form-card">
+    <EditForm Model="_request" OnValidSubmit="LookupAsync" FormName="quote-lookup">
+        <DataAnnotationsValidator />
+        <div class="input-group input-group-lg">
+            <InputText class="input input-symbol" @bind-Value="_request.Symbol" placeholder="Ticker symbol, e.g. MSFT, VOO, BTC-USD" aria-label="Ticker symbol" />
+            <button type="submit" class="btn btn-primary" disabled="@_isLoading">
+                <Icon Name="IconName.Search" /> Look up
+            </button>
+        </div>
+        <ValidationMessage For="() => _request.Symbol" />
+    </EditForm>
+</section>
+
+<ErrorAlert Error="_error" OnDismiss="() => _error = null" />
+
+@if (_isLoading)
+{
+    <LoadingIndicator Text="Fetching quote…" />
+}
+else if (_quote is not null)
+{
+    <section class="card quote-card">
+        <div class="quote-header">
+            <div>
+                <div class="quote-symbol">@_quote.Symbol</div>
+                <div class="muted">@_quote.Name</div>
+                @if (!string.IsNullOrWhiteSpace(_quote.Exchange))
+                {
+                    <div class="muted small">@_quote.Exchange · @_quote.Currency</div>
+                }
+            </div>
+            <div class="quote-price">
+                <div class="quote-price-value">@_quote.Price.ToString(DisplayFormats.Price, CultureInfo.CurrentCulture) <span class="quote-currency">@_quote.Currency</span></div>
+                <div class="@Tone.For(_quote.Change, colorize: true)">
+                    @FormatChange(_quote.Change) (<Percent Value="_quote.ChangePercent" Colorize="false" />)
+                </div>
+                <div class="muted small">As of @_quote.MarketTime.ToLocalTime().ToString(DisplayFormats.DateTime, CultureInfo.CurrentCulture)</div>
+            </div>
+        </div>
+
+        @if (InvestmentAccounts.Count > 0)
+        {
+            <div class="quote-actions">
+                <label for="target-account">Add to account</label>
+                <div class="input-group">
+                    <select id="target-account" class="input" @bind="_targetAccountId">
+                        @foreach (var account in InvestmentAccounts)
+                        {
+                            <option value="@account.Id">@account.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-secondary" @onclick="() => _isAddOpen = true"><Icon Name="IconName.Plus" Size="16" /> Add shares</button>
+                </div>
+            </div>
+        }
+    </section>
+
+    <Modal Title="@($"Add {_quote.Symbol} shares")" @bind-IsOpen="_isAddOpen">
+        <AddSharesForm AccountId="_targetAccountId"
+                       Symbol="@_quote.Symbol"
+                       PricePerShare="_quote.Price"
+                       OnSaved="OnSharesAdded"
+                       OnCancel="() => _isAddOpen = false" />
+    </Modal>
+}
+
+@if (_successMessage is not null)
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+
+@if (_history.Count > 0)
+{
+    <section class="card">
+        <div class="card-header"><h2>Recent lookups</h2></div>
+        <div class="table-wrapper">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Name</th>
+                        <th class="num">Price</th>
+                        <th class="num">Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _history)
+                    {
+                        <tr class="clickable" @onclick="() => LookupSymbolAsync(item.Symbol)">
+                            <td><span class="symbol">@item.Symbol</span></td>
+                            <td>@item.Name</td>
+                            <td class="num">@item.Price.ToString(DisplayFormats.Price, CultureInfo.CurrentCulture) @item.Currency</td>
+                            <td class="num"><Percent Value="item.ChangePercent" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private const int MaxHistoryItems = 10;
+
+    private readonly QuoteLookupRequest _request = new();
+    private readonly List<StockQuote> _history = [];
+    private IReadOnlyList<AccountSummary> _accounts = [];
+    private StockQuote? _quote;
+    private Error? _error;
+    private string? _successMessage;
+    private Guid _targetAccountId;
+    private bool _isLoading;
+    private bool _isAddOpen;
+
+    private IReadOnlyList<AccountSummary> InvestmentAccounts =>
+        _accounts.Where(a => a.SupportsHoldings && !a.IsArchived).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accounts = await AccountService.GetAccountsAsync(includeArchived: false, ComponentToken);
+        _targetAccountId = InvestmentAccounts.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    private Task LookupSymbolAsync(string symbol)
+    {
+        _request.Symbol = symbol;
+        return LookupAsync();
+    }
+
+    private async Task LookupAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _successMessage = null;
+        try
+        {
+            var result = await QuoteService.GetQuoteAsync(_request, ComponentToken);
+            if (!result.IsSuccess)
+            {
+                _quote = null;
+                _error = result.Error;
+                return;
+            }
+
+            _quote = result.Value;
+            _history.RemoveAll(q => string.Equals(q.Symbol, _quote.Symbol, StringComparison.Ordinal));
+            _history.Insert(0, _quote);
+            if (_history.Count > MaxHistoryItems)
+            {
+                _history.RemoveRange(MaxHistoryItems, _history.Count - MaxHistoryItems);
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSharesAdded()
+    {
+        _isAddOpen = false;
+        var accountName = _accounts.FirstOrDefault(a => a.Id == _targetAccountId)?.Name;
+        _successMessage = $"Added {_quote?.Symbol} to {accountName}.";
+    }
+
+    private static string FormatChange(decimal? change) => change switch
+    {
+        null => DisplayFormats.NotAvailable,
+        > 0 => "+" + change.Value.ToString(DisplayFormats.Price, CultureInfo.CurrentCulture),
+        _ => change.Value.ToString(DisplayFormats.Price, CultureInfo.CurrentCulture),
+    };
+}

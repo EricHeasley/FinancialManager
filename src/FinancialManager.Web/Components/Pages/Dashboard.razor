@@ -1,0 +1,151 @@
+@page "/"
+@inherits CancellableComponentBase
+@inject IPortfolioService PortfolioService
+
+<PageTitle>Dashboard · Financial Manager</PageTitle>
+
+<PageHeader Title="Dashboard">
+    <SubtitleContent>
+        @if (_snapshot is not null)
+        {
+            <p class="page-subtitle">Prices as of @_snapshot.AsOfUtc.ToLocalTime().ToString(DisplayFormats.DateTime, CultureInfo.CurrentCulture)</p>
+        }
+    </SubtitleContent>
+    <Actions>
+        <button class="btn btn-secondary" @onclick="LoadAsync" disabled="@_isLoading">
+            <Icon Name="IconName.Refresh" /> Refresh prices
+        </button>
+        <a class="btn btn-primary" href="accounts/new"><Icon Name="IconName.Plus" /> Add account</a>
+    </Actions>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <LoadingIndicator Text="Loading your portfolio…" />
+}
+else if (_snapshot.Accounts.Count == 0)
+{
+    <EmptyState Title="No accounts yet" Message="Add your bank, credit card and investment accounts to start tracking your net worth.">
+        <a class="btn btn-primary" href="accounts/new"><Icon Name="IconName.Plus" /> Add your first account</a>
+    </EmptyState>
+}
+else
+{
+    @if (_snapshot.UnpricedSymbols.Count > 0)
+    {
+        <div class="alert alert-warning">
+            Live prices are unavailable for @string.Join(", ", _snapshot.UnpricedSymbols). These holdings are valued at cost.
+        </div>
+    }
+
+    <section class="stat-grid">
+        <StatCard Label="Net worth" CssClass="stat-primary">
+            <Money Value="_snapshot.NetWorth" />
+        </StatCard>
+        <StatCard Label="Total assets">
+            <Money Value="_snapshot.TotalAssets" />
+        </StatCard>
+        <StatCard Label="Total liabilities">
+            <Money Value="_snapshot.TotalLiabilities" />
+        </StatCard>
+        <StatCard Label="Investments">
+            <ChildContent><Money Value="_snapshot.InvestmentsValue" /></ChildContent>
+            <Footer>Today <Money Value="_snapshot.DayChange" ShowSign Colorize /></Footer>
+        </StatCard>
+    </section>
+
+    <div class="two-column">
+        <section class="card">
+            <div class="card-header">
+                <h2>Assets</h2>
+                <Money Value="_snapshot.TotalAssets" />
+            </div>
+            <AccountValuationTable Accounts="AssetAccounts" EmptyMessage="No asset accounts." />
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Liabilities</h2>
+                <Money Value="_snapshot.TotalLiabilities" />
+            </div>
+            <AccountValuationTable Accounts="LiabilityAccounts" EmptyMessage="No credit cards or loans." />
+        </section>
+    </div>
+
+    @if (Positions.Count > 0)
+    {
+        <section class="card">
+            <div class="card-header">
+                <h2>Investments</h2>
+                <Money Value="_snapshot.InvestmentsValue" />
+            </div>
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Account</th>
+                            <th class="num">Shares</th>
+                            <th class="num">Price</th>
+                            <th class="num">Today</th>
+                            <th class="num">Value</th>
+                            <th class="num">Gain / loss</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (account, position) in Positions)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="symbol">@position.Holding.Symbol</span>
+                                    <div class="muted small">@position.Quote?.Name</div>
+                                </td>
+                                <td><a href="accounts/@account.Id">@account.Name</a></td>
+                                <td class="num">@position.Holding.Quantity.ToString(DisplayFormats.Quantity, CultureInfo.CurrentCulture)</td>
+                                <td class="num"><Money Value="position.Quote?.Price" /></td>
+                                <td class="num"><Percent Value="position.Quote?.ChangePercent" /></td>
+                                <td class="num"><Money Value="position.EffectiveValue" /></td>
+                                <td class="num">
+                                    <Money Value="position.UnrealizedGain" ShowSign Colorize />
+                                    <div class="small"><Percent Value="position.UnrealizedGainPercent" /></div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private PortfolioSnapshot? _snapshot;
+    private bool _isLoading;
+
+    private IReadOnlyList<AccountValuation> AssetAccounts =>
+        _snapshot?.Accounts.Where(a => !a.Account.IsLiability).ToList() ?? [];
+
+    private IReadOnlyList<AccountValuation> LiabilityAccounts =>
+        _snapshot?.Accounts.Where(a => a.Account.IsLiability).ToList() ?? [];
+
+    private IReadOnlyList<(AccountSummary Account, HoldingValuation Position)> Positions =>
+        _snapshot?.Accounts
+            .SelectMany(a => a.Holdings.Select(h => (a.Account, h)))
+            .OrderByDescending(p => p.h.EffectiveValue)
+            .ToList() ?? [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _snapshot = await PortfolioService.GetSnapshotAsync(ComponentToken);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

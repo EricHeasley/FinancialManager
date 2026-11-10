@@ -1,0 +1,43 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.{json,csproj,props,razor.css,css}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_sort_system_directives_first = true
+
+# Private fields are _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Library code awaits without capturing context.
+dotnet_diagnostic.CA2007.severity = none
+# Blazor/ASP.NET Core does not need ConfigureAwait; xunit naming uses underscores.
+dotnet_diagnostic.CA1707.severity = none
+# Localization of exception messages is out of scope.
+dotnet_diagnostic.CA1303.severity = none
+# Logging: allow string interpolation-free templates via LoggerMessage is preferred but not required.
+dotnet_diagnostic.CA1848.severity = suggestion
+# The solution is C#-only; VB keyword collisions (e.g. a type named Error) are not a concern.
+dotnet_diagnostic.CA1716.severity = none
+
+# EF Core migrations are tool-generated.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

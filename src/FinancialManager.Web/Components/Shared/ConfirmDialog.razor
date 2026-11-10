@@ -1,0 +1,37 @@
+<Modal Title="@Title" IsOpen="IsOpen" IsOpenChanged="IsOpenChanged">
+    <p>@Message</p>
+    <div class="form-actions">
+        <button type="button" class="btn btn-secondary" @onclick="Cancel" disabled="@IsBusy">Cancel</button>
+        <button type="button" class="btn @ConfirmButtonClass" @onclick="OnConfirm" disabled="@IsBusy">@ConfirmText</button>
+    </div>
+</Modal>
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = string.Empty;
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Confirm";
+
+    [Parameter]
+    public bool IsDestructive { get; set; }
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    private string ConfirmButtonClass => IsDestructive ? "btn-danger" : "btn-primary";
+
+    private Task Cancel() => IsOpenChanged.InvokeAsync(false);
+}

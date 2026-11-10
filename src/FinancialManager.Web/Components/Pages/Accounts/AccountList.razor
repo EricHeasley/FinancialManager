@@ -1,0 +1,86 @@
+@page "/accounts"
+@inherits CancellableComponentBase
+@inject IAccountService AccountService
+
+<PageTitle>Accounts · Financial Manager</PageTitle>
+
+<PageHeader Title="Accounts" Subtitle="Bank accounts, credit cards, loans and investment accounts.">
+    <Actions>
+        <label class="toggle">
+            <input type="checkbox" checked="@_includeArchived" @onchange="OnIncludeArchivedChanged" />
+            <span>Show archived</span>
+        </label>
+        <a class="btn btn-primary" href="accounts/new"><Icon Name="IconName.Plus" /> Add account</a>
+    </Actions>
+</PageHeader>
+
+@if (_accounts is null)
+{
+    <LoadingIndicator />
+}
+else if (_accounts.Count == 0)
+{
+    <EmptyState Title="No accounts yet" Message="Create an account to start tracking balances and investments.">
+        <a class="btn btn-primary" href="accounts/new"><Icon Name="IconName.Plus" /> Add account</a>
+    </EmptyState>
+}
+else
+{
+    <section class="card">
+        <div class="table-wrapper">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Institution</th>
+                        <th class="num">Holdings</th>
+                        <th class="num">Cash balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var account in _accounts)
+                    {
+                        <tr class="@(account.IsArchived ? "row-archived" : null)">
+                            <td>
+                                <a href="accounts/@account.Id" class="account-link">@account.Name</a>
+                                @if (account.IsArchived)
+                                {
+                                    <span class="badge badge-muted">Archived</span>
+                                }
+                            </td>
+                            <td><AccountTypeBadge Type="account.Type" /></td>
+                            <td>@(account.Institution ?? DisplayFormats.NotAvailable)</td>
+                            <td class="num">@(account.SupportsHoldings ? account.Holdings.Count.ToString(CultureInfo.CurrentCulture) : DisplayFormats.NotAvailable)</td>
+                            <td class="num">
+                                <Money Value="account.CashBalance" />
+                                @if (account.IsLiability)
+                                {
+                                    <div class="muted small">owed</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<AccountSummary>? _accounts;
+    private bool _includeArchived;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task OnIncludeArchivedChanged(ChangeEventArgs args)
+    {
+        _includeArchived = args.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _accounts = await AccountService.GetAccountsAsync(_includeArchived, ComponentToken);
+    }
+}

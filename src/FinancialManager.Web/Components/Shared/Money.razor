@@ -1,0 +1,24 @@
+<span class="money @ToneClass">@Formatted</span>
+
+@code {
+    /// <summary>Amount in the configured base currency. <c>null</c> renders as not available.</summary>
+    [Parameter]
+    public decimal? Value { get; set; }
+
+    /// <summary>Prefix positive values with a plus sign (useful for changes and gains).</summary>
+    [Parameter]
+    public bool ShowSign { get; set; }
+
+    /// <summary>Color positive values green and negative values red.</summary>
+    [Parameter]
+    public bool Colorize { get; set; }
+
+    private string Formatted => Value switch
+    {
+        null => DisplayFormats.NotAvailable,
+        > 0 when ShowSign => "+" + Value.Value.ToString(DisplayFormats.Currency, CultureInfo.CurrentCulture),
+        _ => Value.Value.ToString(DisplayFormats.Currency, CultureInfo.CurrentCulture),
+    };
+
+    private string ToneClass => Tone.For(Value, Colorize);
+}

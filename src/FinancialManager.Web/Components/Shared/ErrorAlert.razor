@@ -1,0 +1,20 @@
+@if (Error is not null)
+{
+    <div class="alert @AlertClass" role="alert">
+        <span>@Error.Message</span>
+        @if (OnDismiss.HasDelegate)
+        {
+            <button type="button" class="alert-dismiss" aria-label="Dismiss" @onclick="OnDismiss">×</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Error? Error { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismiss { get; set; }
+
+    private string AlertClass => Error?.Type == ErrorType.Validation ? "alert-warning" : "alert-error";
+}

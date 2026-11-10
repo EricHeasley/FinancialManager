@@ -1,0 +1,74 @@
+@inherits CancellableComponentBase
+@inject IAccountService AccountService
+
+<EditForm Model="_request" OnValidSubmit="SubmitAsync" FormName="edit-account">
+    <DataAnnotationsValidator />
+    <ErrorAlert Error="_error" />
+
+    <div class="form-field">
+        <label for="edit-name">Account name</label>
+        <InputText id="edit-name" class="input" @bind-Value="_request.Name" />
+        <ValidationMessage For="() => _request.Name" />
+    </div>
+    <div class="form-field">
+        <label for="edit-institution">Institution <span class="optional">(optional)</span></label>
+        <InputText id="edit-institution" class="input" @bind-Value="_request.Institution" />
+        <ValidationMessage For="() => _request.Institution" />
+    </div>
+    <div class="form-field">
+        <label for="edit-notes">Notes <span class="optional">(optional)</span></label>
+        <InputTextArea id="edit-notes" class="input" rows="3" @bind-Value="_request.Notes" />
+        <ValidationMessage For="() => _request.Notes" />
+    </div>
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" disabled="@_isSaving">Save changes</button>
+    </div>
+</EditForm>
+
+@code {
+    private UpdateAccountRequest _request = new();
+    private Error? _error;
+    private bool _isSaving;
+
+    [Parameter, EditorRequired]
+    public Guid AccountId { get; set; }
+
+    [Parameter, EditorRequired]
+    public AccountDetails Details { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _request = new UpdateAccountRequest
+        {
+            Name = Details.Summary.Name,
+            Institution = Details.Summary.Institution,
+            Notes = Details.Notes,
+        };
+    }
+
+    private async Task SubmitAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            var result = await AccountService.UpdateAccountAsync(AccountId, _request, ComponentToken);
+            _error = result.Error;
+            if (result.IsSuccess)
+            {
+                await OnSaved.InvokeAsync();
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

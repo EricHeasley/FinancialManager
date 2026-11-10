@@ -1,0 +1,42 @@
+@if (Accounts.Count == 0)
+{
+    <p class="muted card-empty">@EmptyMessage</p>
+}
+else
+{
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th class="num">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var valuation in Accounts)
+                {
+                    <tr>
+                        <td>
+                            <a href="accounts/@valuation.Account.Id" class="account-link">@valuation.Account.Name</a>
+                            @if (!string.IsNullOrWhiteSpace(valuation.Account.Institution))
+                            {
+                                <div class="muted small">@valuation.Account.Institution</div>
+                            }
+                        </td>
+                        <td><AccountTypeBadge Type="valuation.Account.Type" /></td>
+                        <td class="num"><Money Value="valuation.TotalValue" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AccountValuation> Accounts { get; set; } = [];
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = string.Empty;
+}

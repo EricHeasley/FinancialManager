@@ -1,0 +1,83 @@
+@inherits CancellableComponentBase
+@inject IAccountService AccountService
+@inject FinancialManager.Application.Abstractions.IClock Clock
+
+<EditForm Model="_request" OnValidSubmit="SubmitAsync" FormName="record-transaction">
+    <DataAnnotationsValidator />
+    <ErrorAlert Error="_error" />
+
+    <div class="segmented" role="radiogroup" aria-label="Transaction type">
+        @foreach (var type in Enum.GetValues<TransactionType>())
+        {
+            <button type="button" role="radio" aria-checked="@(_request.Type == type)"
+                    class="segment @(_request.Type == type ? "active" : null)"
+                    @onclick="() => _request.Type = type">
+                @type.ToDisplayName(IsLiability)
+            </button>
+        }
+    </div>
+
+    <div class="form-grid">
+        <div class="form-field">
+            <label for="txn-date">Date</label>
+            <InputDate id="txn-date" class="input" @bind-Value="_request.Date" />
+            <ValidationMessage For="() => _request.Date" />
+        </div>
+        <div class="form-field">
+            <label for="txn-amount">Amount</label>
+            <InputNumber id="txn-amount" class="input" @bind-Value="_request.Amount" step="0.01" min="0" />
+            <ValidationMessage For="() => _request.Amount" />
+        </div>
+        <div class="form-field form-field-wide">
+            <label for="txn-description">Description</label>
+            <InputText id="txn-description" class="input" @bind-Value="_request.Description" placeholder="e.g. Paycheck, Groceries, Rent" />
+            <ValidationMessage For="() => _request.Description" />
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" disabled="@_isSaving">Save transaction</button>
+    </div>
+</EditForm>
+
+@code {
+    private RecordTransactionRequest _request = new();
+    private Error? _error;
+    private bool _isSaving;
+
+    [Parameter, EditorRequired]
+    public Guid AccountId { get; set; }
+
+    [Parameter]
+    public bool IsLiability { get; set; }
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _request = new RecordTransactionRequest { Date = Clock.Today };
+    }
+
+    private async Task SubmitAsync()
+    {
+        _isSaving = true;
+        try
+        {
+            var result = await AccountService.RecordTransactionAsync(AccountId, _request, ComponentToken);
+            _error = result.Error;
+            if (result.IsSuccess)
+            {
+                await OnSaved.InvokeAsync();
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

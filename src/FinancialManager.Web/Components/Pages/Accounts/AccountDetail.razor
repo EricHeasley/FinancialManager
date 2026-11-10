@@ -1,0 +1,354 @@
+@page "/accounts/{AccountId:guid}"
+@inherits CancellableComponentBase
+@inject IAccountService AccountService
+@inject IPortfolioService PortfolioService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_details?.Summary.Name ?? "Account") · Financial Manager</PageTitle>
+
+<a class="back-link" href="accounts"><Icon Name="IconName.ArrowLeft" Size="16" /> Accounts</a>
+
+@if (_loadError is not null)
+{
+    <ErrorAlert Error="_loadError" />
+}
+else if (_details is null || _valuation is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    var account = _details.Summary;
+
+    <PageHeader Title="@account.Name">
+        <SubtitleContent>
+            <div class="header-meta">
+                <AccountTypeBadge Type="account.Type" />
+                @if (!string.IsNullOrWhiteSpace(account.Institution))
+                {
+                    <span class="muted">@account.Institution</span>
+                }
+                @if (account.IsArchived)
+                {
+                    <span class="badge badge-muted">Archived</span>
+                }
+            </div>
+        </SubtitleContent>
+        <Actions>
+            @if (account.IsArchived)
+            {
+                <button class="btn btn-secondary" @onclick="RestoreAsync" disabled="@_isBusy">Restore</button>
+            }
+            else
+            {
+                <button class="btn btn-secondary" @onclick="() => _isEditOpen = true"><Icon Name="IconName.Edit" /> Edit</button>
+                <button class="btn btn-secondary" @onclick="ArchiveAsync" disabled="@_isBusy"><Icon Name="IconName.Archive" /> Archive</button>
+            }
+            <button class="btn btn-danger-outline" @onclick="() => _isDeleteOpen = true"><Icon Name="IconName.Trash" /> Delete</button>
+        </Actions>
+    </PageHeader>
+
+    <ErrorAlert Error="_actionError" OnDismiss="() => _actionError = null" />
+
+    <section class="stat-grid">
+        <StatCard Label="@(account.IsLiability ? "Amount owed" : "Cash balance")" CssClass="stat-primary">
+            <Money Value="account.CashBalance" />
+        </StatCard>
+        @if (account.SupportsHoldings)
+        {
+            <StatCard Label="Holdings value">
+                <ChildContent><Money Value="_valuation.HoldingsValue" /></ChildContent>
+                <Footer>Cost basis <Money Value="_valuation.HoldingsCostBasis" /></Footer>
+            </StatCard>
+            <StatCard Label="Total value">
+                <ChildContent><Money Value="_valuation.TotalValue" /></ChildContent>
+                <Footer>Today <Money Value="_valuation.DayChange" ShowSign Colorize /></Footer>
+            </StatCard>
+        }
+        <StatCard Label="Opening balance">
+            <ChildContent><Money Value="_details.OpeningBalance" /></ChildContent>
+            <Footer>Added @_details.CreatedUtc.ToLocalTime().ToString(DisplayFormats.Date, CultureInfo.CurrentCulture)</Footer>
+        </StatCard>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_details.Notes))
+    {
+        <section class="card notes">@_details.Notes</section>
+    }
+
+    @if (account.SupportsHoldings)
+    {
+        <section class="card">
+            <div class="card-header">
+                <h2>Holdings</h2>
+                <div class="card-actions">
+                    <button class="btn btn-secondary btn-sm" @onclick="RefreshValuationAsync" disabled="@_isBusy">
+                        <Icon Name="IconName.Refresh" Size="16" /> Refresh prices
+                    </button>
+                    @if (!account.IsArchived)
+                    {
+                        <button class="btn btn-primary btn-sm" @onclick="() => _isAddSharesOpen = true">
+                            <Icon Name="IconName.Plus" Size="16" /> Add shares
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_valuation.Holdings.Count == 0)
+            {
+                <p class="muted card-empty">No holdings yet. Add the stocks, ETFs or funds you own in this account.</p>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th class="num">Shares</th>
+                                <th class="num">Avg cost</th>
+                                <th class="num">Price</th>
+                                <th class="num">Today</th>
+                                <th class="num">Market value</th>
+                                <th class="num">Gain / loss</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var position in _valuation.Holdings)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="symbol">@position.Holding.Symbol</span>
+                                        <div class="muted small">@(position.Quote?.Name ?? "Price unavailable")</div>
+                                    </td>
+                                    <td class="num">@position.Holding.Quantity.ToString(DisplayFormats.Quantity, CultureInfo.CurrentCulture)</td>
+                                    <td class="num"><Money Value="position.Holding.AverageCostPerShare" /></td>
+                                    <td class="num"><Money Value="position.Quote?.Price" /></td>
+                                    <td class="num"><Percent Value="position.Quote?.ChangePercent" /></td>
+                                    <td class="num"><Money Value="position.MarketValue" /></td>
+                                    <td class="num">
+                                        <Money Value="position.UnrealizedGain" ShowSign Colorize />
+                                        <div class="small"><Percent Value="position.UnrealizedGainPercent" /></div>
+                                    </td>
+                                    <td class="num">
+                                        @if (!account.IsArchived)
+                                        {
+                                            <button class="btn btn-link btn-sm" @onclick="() => OpenRemoveShares(position.Holding)">Sell</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+
+    <section class="card">
+        <div class="card-header">
+            <h2>Transactions</h2>
+            @if (!account.IsArchived)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="() => _isTransactionOpen = true">
+                    <Icon Name="IconName.Plus" Size="16" /> Add transaction
+                </button>
+            }
+        </div>
+
+        @if (_details.Transactions.Count == 0)
+        {
+            <p class="muted card-empty">No transactions recorded.</p>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th class="num">Amount</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var transaction in _details.Transactions)
+                        {
+                            <tr>
+                                <td class="nowrap">@transaction.Date.ToString(DisplayFormats.Date, CultureInfo.CurrentCulture)</td>
+                                <td>@transaction.Description</td>
+                                <td>@transaction.Type.ToDisplayName(account.IsLiability)</td>
+                                <td class="num">
+                                    <Money Value="SignedAmount(transaction)" ShowSign Colorize />
+                                </td>
+                                <td class="num">
+                                    @if (!account.IsArchived)
+                                    {
+                                        <button class="btn btn-icon" title="Delete transaction" aria-label="Delete transaction"
+                                                @onclick="() => RemoveTransactionAsync(transaction.Id)" disabled="@_isBusy">
+                                            <Icon Name="IconName.Trash" Size="16" />
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <Modal Title="Edit account" @bind-IsOpen="_isEditOpen">
+        <AccountEditForm AccountId="AccountId" Details="_details" OnSaved="OnChildSavedAsync" OnCancel="CloseDialogs" />
+    </Modal>
+
+    <Modal Title="Add transaction" @bind-IsOpen="_isTransactionOpen">
+        <TransactionEntryForm AccountId="AccountId" IsLiability="account.IsLiability" OnSaved="OnChildSavedAsync" OnCancel="CloseDialogs" />
+    </Modal>
+
+    <Modal Title="Add shares" @bind-IsOpen="_isAddSharesOpen">
+        <AddSharesForm AccountId="AccountId" OnSaved="OnChildSavedAsync" OnCancel="CloseDialogs" />
+    </Modal>
+
+    <Modal Title="Sell shares" @bind-IsOpen="_isRemoveSharesOpen">
+        @if (_sellHolding is not null)
+        {
+            <RemoveSharesForm AccountId="AccountId" Holding="_sellHolding" OnSaved="OnChildSavedAsync" OnCancel="CloseDialogs" />
+        }
+    </Modal>
+
+    <ConfirmDialog Title="Delete account"
+                   Message="@($"Permanently delete '{account.Name}' and all of its transactions and holdings? This cannot be undone. Consider archiving instead.")"
+                   ConfirmText="Delete account"
+                   IsDestructive="true"
+                   IsBusy="_isBusy"
+                   @bind-IsOpen="_isDeleteOpen"
+                   OnConfirm="DeleteAsync" />
+}
+
+@code {
+    private AccountDetails? _details;
+    private AccountValuation? _valuation;
+    private Error? _loadError;
+    private Error? _actionError;
+    private HoldingModel? _sellHolding;
+    private bool _isBusy;
+    private bool _isEditOpen;
+    private bool _isTransactionOpen;
+    private bool _isAddSharesOpen;
+    private bool _isRemoveSharesOpen;
+    private bool _isDeleteOpen;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var result = await AccountService.GetAccountAsync(AccountId, ComponentToken);
+        if (!result.IsSuccess)
+        {
+            _loadError = result.Error;
+            _details = null;
+            _valuation = null;
+            return;
+        }
+
+        _loadError = null;
+        _details = result.Value;
+        _valuation = await PortfolioService.ValueAccountAsync(_details.Summary, ComponentToken);
+    }
+
+    private async Task RefreshValuationAsync()
+    {
+        if (_details is null)
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+            _valuation = await PortfolioService.ValueAccountAsync(_details.Summary, ComponentToken));
+    }
+
+    private async Task OnChildSavedAsync()
+    {
+        CloseDialogs();
+        await LoadAsync();
+    }
+
+    private void CloseDialogs()
+    {
+        _isEditOpen = false;
+        _isTransactionOpen = false;
+        _isAddSharesOpen = false;
+        _isRemoveSharesOpen = false;
+        _sellHolding = null;
+    }
+
+    private void OpenRemoveShares(HoldingModel holding)
+    {
+        _sellHolding = holding;
+        _isRemoveSharesOpen = true;
+    }
+
+    private Task ArchiveAsync() =>
+        ExecuteCommandAsync(() => AccountService.ArchiveAccountAsync(AccountId, ComponentToken));
+
+    private Task RestoreAsync() =>
+        ExecuteCommandAsync(() => AccountService.RestoreAccountAsync(AccountId, ComponentToken));
+
+    private Task RemoveTransactionAsync(Guid transactionId) =>
+        ExecuteCommandAsync(() => AccountService.RemoveTransactionAsync(AccountId, transactionId, ComponentToken));
+
+    private async Task DeleteAsync()
+    {
+        await RunBusyAsync(async () =>
+        {
+            var result = await AccountService.DeleteAccountAsync(AccountId, ComponentToken);
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo("accounts");
+                return;
+            }
+
+            _isDeleteOpen = false;
+            _actionError = result.Error;
+        });
+    }
+
+    private async Task ExecuteCommandAsync(Func<Task<Result>> command)
+    {
+        await RunBusyAsync(async () =>
+        {
+            var result = await command();
+            _actionError = result.Error;
+            if (result.IsSuccess)
+            {
+                await LoadAsync();
+            }
+        });
+    }
+
+    private async Task RunBusyAsync(Func<Task> action)
+    {
+        _isBusy = true;
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Shows money flowing into an asset account, or paying down a liability, as positive.
+    /// </summary>
+    private static decimal SignedAmount(TransactionModel transaction) =>
+        transaction.Type == TransactionType.Deposit ? transaction.Amount : -transaction.Amount;
+}

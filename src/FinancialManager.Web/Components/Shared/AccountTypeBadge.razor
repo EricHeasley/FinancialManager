@@ -1,0 +1,6 @@
+<span class="badge @Type.ToBadgeClass()">@Type.ToDisplayName()</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public AccountType Type { get; set; }
+}
